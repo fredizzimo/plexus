@@ -22,6 +22,20 @@ interface SyntheticQuotaResponse {
     remaining?: number;
     renewsAt?: string;
   };
+  weeklyTokenLimit?: {
+    nextRegenAt?: string;
+    percentRemaining?: number;
+    maxCredits?: string;
+    remainingCredits?: string;
+    nextRegenCredits?: string;
+  };
+  rollingFiveHourLimit?: {
+    nextTickAt?: string;
+    tickPercent?: number;
+    remaining?: number;
+    max?: number;
+    limited?: boolean;
+  };
 }
 
 export class SyntheticQuotaChecker extends QuotaChecker {
@@ -66,6 +80,21 @@ export class SyntheticQuotaChecker extends QuotaChecker {
         );
       }
 
+      if (data.rollingFiveHourLimit) {
+        const { remaining, max, nextTickAt } = data.rollingFiveHourLimit;
+        windows.push(
+          this.createWindow(
+            'rolling_five_hour',
+            max,
+            max !== undefined && remaining !== undefined ? max - remaining : undefined,
+            remaining,
+            'requests',
+            nextTickAt ? new Date(nextTickAt) : undefined,
+            'Rolling 5-hour limit'
+          )
+        );
+      }
+
       if (data.search?.hourly) {
         windows.push(
           this.createWindow(
@@ -90,6 +119,28 @@ export class SyntheticQuotaChecker extends QuotaChecker {
             'requests',
             data.freeToolCalls.renewsAt ? new Date(data.freeToolCalls.renewsAt) : undefined,
             'Free tool calls (5-hour)'
+          )
+        );
+      }
+
+      if (data.weeklyTokenLimit) {
+        const { maxCredits, remainingCredits, nextRegenAt } = data.weeklyTokenLimit;
+        const parseCredits = (val?: string) => {
+          if (!val) return undefined;
+          const num = parseFloat(val.replace('$', ''));
+          return isNaN(num) ? undefined : num;
+        };
+        windows.push(
+          this.createWindow(
+            'rolling_weekly',
+            parseCredits(maxCredits),
+            parseCredits(maxCredits) !== undefined && parseCredits(remainingCredits) !== undefined
+              ? parseCredits(maxCredits)! - parseCredits(remainingCredits)!
+              : undefined,
+            parseCredits(remainingCredits),
+            'dollars',
+            nextRegenAt ? new Date(nextRegenAt) : undefined,
+            'Weekly token credits'
           )
         );
       }
