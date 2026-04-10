@@ -110,7 +110,7 @@ export const QuotaHistoryModal: React.FC<QuotaHistoryModalProps> = ({
   const SYNTHETIC_DISPLAY_NAMES: Record<string, string> = {
     five_hour: 'Five Hour (old)',
     rolling_five_hour: 'Five Hour',
-    weekly: 'Weekly (old)',
+    toolcalls: 'Tool Calls (old)',
     rolling_weekly: 'Weekly',
   };
 

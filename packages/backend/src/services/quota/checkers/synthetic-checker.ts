@@ -66,20 +66,6 @@ export class SyntheticQuotaChecker extends QuotaChecker {
       const data: SyntheticQuotaResponse = await response.json();
       const windows: QuotaWindow[] = [];
 
-      if (data.subscription) {
-        windows.push(
-          this.createWindow(
-            'five_hour',
-            data.subscription.limit,
-            data.subscription.requests,
-            data.subscription.remaining,
-            'requests',
-            data.subscription.renewsAt ? new Date(data.subscription.renewsAt) : undefined,
-            '5-hour request quota'
-          )
-        );
-      }
-
       if (data.rollingFiveHourLimit) {
         const { remaining, max, nextTickAt } = data.rollingFiveHourLimit;
         windows.push(
@@ -105,20 +91,6 @@ export class SyntheticQuotaChecker extends QuotaChecker {
             'requests',
             data.search.hourly.renewsAt ? new Date(data.search.hourly.renewsAt) : undefined,
             'Search requests (hourly)'
-          )
-        );
-      }
-
-      if (data.freeToolCalls) {
-        windows.push(
-          this.createWindow(
-            'toolcalls',
-            data.freeToolCalls.limit,
-            data.freeToolCalls.requests,
-            data.freeToolCalls.remaining,
-            'requests',
-            data.freeToolCalls.renewsAt ? new Date(data.freeToolCalls.renewsAt) : undefined,
-            'Free tool calls (5-hour)'
           )
         );
       }
