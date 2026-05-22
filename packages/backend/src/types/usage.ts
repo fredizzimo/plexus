@@ -51,6 +51,13 @@ export interface UsageRecord {
   visionFallthroughModel?: string | null;
   // Energy estimation
   kwhUsed?: number | null;
+  // Provider-reported energy detail fields (from SSE `: energy` comments)
+  energyAvgPowerWatts?: number | null;
+  energyDurationSeconds?: number | null;
+  energyAttributionMethod?: string | null;
+  energyAttributionRatio?: number | null;
+  energyRatioWasCapped?: number | null; // 0 or 1 (SQLite/Postgres boolean convention)
+  energyUncappedKwh?: number | null;
   // Provider-reported cost (from SSE `: cost` comments or response payload)
   // When present, costTotal/costInput/costOutput are overridden with actual values
   providerReportedCost?: number | null;

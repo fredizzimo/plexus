@@ -29,6 +29,26 @@ export function applyProviderReportedEnergy(
     const energyKwh = Number(energyData.energy_kwh);
     if (!isNaN(energyKwh) && energyKwh >= 0) {
       usageRecord.kwhUsed = Number(energyKwh.toFixed(10));
+
+      // Set provider-reported energy detail fields
+      if (energyData.avg_power_watts != null) {
+        usageRecord.energyAvgPowerWatts = energyData.avg_power_watts;
+      }
+      if (energyData.duration_seconds != null) {
+        usageRecord.energyDurationSeconds = energyData.duration_seconds;
+      }
+      if (energyData.attribution_method != null) {
+        usageRecord.energyAttributionMethod = energyData.attribution_method;
+      }
+      if (energyData.attribution_ratio != null) {
+        usageRecord.energyAttributionRatio = energyData.attribution_ratio;
+      }
+      if (energyData.ratio_was_capped != null) {
+        usageRecord.energyRatioWasCapped = energyData.ratio_was_capped ? 1 : 0;
+      }
+      if (energyData.uncapped_energy_kwh != null) {
+        usageRecord.energyUncappedKwh = energyData.uncapped_energy_kwh;
+      }
     }
   } else {
     usageRecord.kwhUsed = estimateKwhUsed(

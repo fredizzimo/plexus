@@ -54,6 +54,13 @@ export const requestUsage = pgTable(
     visionFallthroughModel: text('vision_fallthrough_model'),
     // Energy estimation
     kwhUsed: real('kwh_used'),
+    // Provider-reported energy detail fields (from SSE `: energy` comments)
+    energyAvgPowerWatts: real('energy_avg_power_watts'),
+    energyDurationSeconds: real('energy_duration_seconds'),
+    energyAttributionMethod: text('energy_attribution_method'),
+    energyAttributionRatio: real('energy_attribution_ratio'),
+    energyRatioWasCapped: integer('energy_ratio_was_capped'),
+    energyUncappedKwh: real('energy_uncapped_kwh'),
     // Provider-reported cost (actual cost from provider, e.g. from SSE `: cost` comments)
     providerReportedCost: real('provider_reported_cost'),
   },
