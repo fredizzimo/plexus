@@ -9,6 +9,12 @@ function createUsageRecord(overrides: Partial<UsageRecord> = {}): Partial<UsageR
     tokensInput: 100,
     tokensOutput: 50,
     kwhUsed: null,
+    avgPowerWatts: null,
+    durationSeconds: null,
+    attributionMethod: null,
+    attributionRatio: null,
+    ratioWasCapped: null,
+    uncappedEnergyKwh: null,
     ...overrides,
   };
 }
@@ -133,6 +139,82 @@ describe('applyProviderReportedEnergy', () => {
 
       // Estimation should produce a positive value based on 500/200 tokens
       expect(record.kwhUsed).toBeGreaterThan(0);
+    });
+  });
+
+  describe('provider-reported energy detail fields', () => {
+    test('sets all detail fields from provider energy data', () => {
+      const record = createUsageRecord();
+      applyProviderReportedEnergy(
+        record,
+        {
+          energy_kwh: 0.000056025,
+          avg_power_watts: 2914,
+          duration_seconds: 0.989,
+          attribution_method: 'counter_prorated_multi_gpu_8',
+          attribution_ratio: 0.07,
+          ratio_was_capped: true,
+          uncapped_energy_kwh: 0.000800355,
+        },
+        defaultFallback
+      );
+
+      expect(record.avgPowerWatts).toBe(2914);
+      expect(record.durationSeconds).toBe(0.989);
+      expect(record.attributionMethod).toBe('counter_prorated_multi_gpu_8');
+      expect(record.attributionRatio).toBe(0.07);
+      expect(record.ratioWasCapped).toBe(1);
+      expect(record.uncappedEnergyKwh).toBe(0.000800355);
+    });
+
+    test('sets ratioWasCapped as 0 when ratio_was_capped is false', () => {
+      const record = createUsageRecord();
+      applyProviderReportedEnergy(
+        record,
+        {
+          energy_kwh: 0.000056025,
+          ratio_was_capped: false,
+        },
+        defaultFallback
+      );
+
+      expect(record.ratioWasCapped).toBe(0);
+    });
+
+    test('leaves missing detail fields null when partial energy data provided', () => {
+      const record = createUsageRecord();
+      applyProviderReportedEnergy(
+        record,
+        {
+          energy_kwh: 0.000056025,
+          avg_power_watts: 2914,
+        },
+        defaultFallback
+      );
+
+      expect(record.avgPowerWatts).toBe(2914);
+      expect(record.durationSeconds).toBeNull();
+      expect(record.attributionMethod).toBeNull();
+      expect(record.attributionRatio).toBeNull();
+      expect(record.ratioWasCapped).toBeNull();
+      expect(record.uncappedEnergyKwh).toBeNull();
+    });
+
+    test('leaves detail fields null when energy_kwh is invalid', () => {
+      const record = createUsageRecord();
+      applyProviderReportedEnergy(
+        record,
+        {
+          energy_kwh: NaN,
+          avg_power_watts: 2914,
+          duration_seconds: 0.989,
+        },
+        defaultFallback
+      );
+
+      expect(record.kwhUsed).toBeNull();
+      expect(record.avgPowerWatts).toBeNull();
+      expect(record.durationSeconds).toBeNull();
     });
   });
 });

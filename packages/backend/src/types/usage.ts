@@ -51,9 +51,19 @@ export interface UsageRecord {
   visionFallthroughModel?: string | null;
   // Energy estimation
   kwhUsed?: number | null;
+<<<<<<< HEAD
   // Timestamp of last INSERT or UPDATE (set by DB triggers) for CDC replication
   // 0 = row predates this column (unknown modification time)
   updatedAt: number;
+=======
+  // Provider-reported energy detail fields (from SSE `: energy` comments)
+  avgPowerWatts?: number | null;
+  durationSeconds?: number | null;
+  attributionMethod?: string | null;
+  attributionRatio?: number | null;
+  ratioWasCapped?: number | null; // 0 or 1 (SQLite/Postgres boolean convention)
+  uncappedEnergyKwh?: number | null;
+>>>>>>> 3d57b8bd (feat: extract provider-reported energy detail fields)
   // Provider-reported cost (from SSE `: cost` comments or response payload)
   // When present, costTotal/costInput/costOutput are overridden with actual values
   providerReportedCost?: number | null;
