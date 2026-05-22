@@ -5,6 +5,7 @@
  */
 export const DB_TEST_FILES = [
   'src/db/**/*.test.ts',
+  'src/routes/management/__tests__/usage-records.test.ts',
   'src/routes/management/__tests__/usage-summary.test.ts',
   'src/services/__tests__/usage-storage-performance.test.ts',
   'src/services/quota/__tests__/quota-enforcer.test.ts',
