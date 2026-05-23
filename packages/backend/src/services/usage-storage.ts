@@ -626,6 +626,12 @@ export class UsageStorageService extends EventEmitter {
           toolCallsCount: schema.requestUsage.toolCallsCount,
           finishReason: schema.requestUsage.finishReason,
           kwhUsed: schema.requestUsage.kwhUsed,
+          energyAvgPowerWatts: schema.requestUsage.energyAvgPowerWatts,
+          energyDurationSeconds: schema.requestUsage.energyDurationSeconds,
+          energyAttributionMethod: schema.requestUsage.energyAttributionMethod,
+          energyAttributionRatio: schema.requestUsage.energyAttributionRatio,
+          energyRatioWasCapped: schema.requestUsage.energyRatioWasCapped,
+          energyUncappedKwh: schema.requestUsage.energyUncappedKwh,
           hasDebug: sql<boolean>`EXISTS(SELECT 1 FROM ${schema.debugLogs} dl WHERE dl.request_id = request_usage.request_id)`,
           hasError: sql<boolean>`EXISTS(SELECT 1 FROM ${schema.inferenceErrors} ie WHERE ie.request_id = request_usage.request_id)`,
         })
@@ -683,6 +689,12 @@ export class UsageStorageService extends EventEmitter {
         toolCallsCount: row.toolCallsCount,
         finishReason: row.finishReason,
         kwhUsed: row.kwhUsed,
+        energyAvgPowerWatts: row.energyAvgPowerWatts ?? null,
+        energyDurationSeconds: row.energyDurationSeconds ?? null,
+        energyAttributionMethod: row.energyAttributionMethod ?? null,
+        energyAttributionRatio: row.energyAttributionRatio ?? null,
+        energyRatioWasCapped: row.energyRatioWasCapped != null ? !!row.energyRatioWasCapped : null,
+        energyUncappedKwh: row.energyUncappedKwh ?? null,
       }));
 
       const countResults = await db

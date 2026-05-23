@@ -864,4 +864,108 @@ describe('GET /v0/management/usage', () => {
     expect(body.total).toBe(1);
     expect(body.data[0].requestId).toBe('override-mine');
   });
+
+  // ── Provider-reported energy detail fields ──────────────────────────
+
+  it('returns provider-reported energy detail fields in the API response', async () => {
+    await db.insert(schema.requestUsage).values([
+      usageRow({
+        requestId: 'energy-detail-1',
+        kwhUsed: 0.000056025,
+        energyAvgPowerWatts: 2914,
+        energyDurationSeconds: 0.989,
+        energyAttributionMethod: 'counter_prorated_multi_gpu_8',
+        energyAttributionRatio: 0.07,
+        energyRatioWasCapped: 1,
+        energyUncappedKwh: 0.000800355,
+      }),
+    ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const record = body.data[0];
+    expect(record.energyAvgPowerWatts).toBe(2914);
+    expect(record.energyDurationSeconds).toBeCloseTo(0.989, 3);
+    expect(record.energyAttributionMethod).toBe('counter_prorated_multi_gpu_8');
+    expect(record.energyAttributionRatio).toBeCloseTo(0.07, 2);
+    expect(record.energyRatioWasCapped).toBe(true);
+    expect(record.energyUncappedKwh).toBeCloseTo(0.000800355, 9);
+  });
+
+  it('converts energyRatioWasCapped integer 0 to boolean false', async () => {
+    await db.insert(schema.requestUsage).values([
+      usageRow({
+        requestId: 'energy-capped-false',
+        kwhUsed: 0.001,
+        energyRatioWasCapped: 0,
+      }),
+    ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const record = body.data[0];
+    expect(record.energyRatioWasCapped).toBe(false);
+  });
+
+  it('returns null for energy detail fields that are not set', async () => {
+    await db.insert(schema.requestUsage).values([
+      usageRow({
+        requestId: 'energy-no-detail',
+        kwhUsed: 0.001,
+      }),
+    ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const record = body.data[0];
+    expect(record.kwhUsed).toBeCloseTo(0.001, 3);
+    expect(record.energyAvgPowerWatts).toBeNull();
+    expect(record.energyDurationSeconds).toBeNull();
+    expect(record.energyAttributionMethod).toBeNull();
+    expect(record.energyAttributionRatio).toBeNull();
+    expect(record.energyRatioWasCapped).toBeNull();
+    expect(record.energyUncappedKwh).toBeNull();
+  });
+
+  it('allows energy detail fields in the fields projection parameter', async () => {
+    await db.insert(schema.requestUsage).values([
+      usageRow({
+        requestId: 'energy-proj-1',
+        kwhUsed: 0.000056025,
+        energyAvgPowerWatts: 2914,
+        energyAttributionMethod: 'counter_prorated_multi_gpu_8',
+      }),
+    ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?fields=requestId,energyAvgPowerWatts,energyAttributionMethod',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const record = body.data[0];
+    expect(Object.keys(record).sort()).toEqual([
+      'energyAttributionMethod',
+      'energyAvgPowerWatts',
+      'requestId',
+    ]);
+    expect(record.energyAvgPowerWatts).toBe(2914);
+    expect(record.energyAttributionMethod).toBe('counter_prorated_multi_gpu_8');
+  });
 });
