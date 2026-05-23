@@ -1,9 +1,11 @@
 import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
+import { eq } from 'drizzle-orm';
 import { registerUsageRoutes } from '../usage';
 import { UsageStorageService } from '../../../services/usage-storage';
 import { closeDatabase, getDatabase, getSchema, initializeDatabase } from '../../../db/client';
 import { runMigrations } from '../../../db/migrate';
+import { ensureUpdatedAtTriggers } from '../../../db/trigger-migration';
 import type { Principal } from '../_principal';
 
 /**
@@ -35,6 +37,7 @@ describe('GET /v0/management/usage', () => {
     process.env.DATABASE_URL = process.env.PLEXUS_TEST_DB_URL ?? process.env.DATABASE_URL;
     initializeDatabase(process.env.DATABASE_URL);
     await runMigrations();
+    await ensureUpdatedAtTriggers();
 
     db = getDatabase();
     schema = getSchema();
@@ -620,44 +623,53 @@ describe('GET /v0/management/usage', () => {
 
   // ── updatedSince filter (timestamp-based CDC replication) ──────────
 
-  // Fixed epoch-ms timestamps for deterministic test data
-  const T1 = 1_700_000_001_000;
-  const T2 = 1_700_000_002_000;
-  const T3 = 1_700_000_003_000;
-  const T4 = 1_700_000_004_000;
-  const T5 = 1_700_000_005_000;
-
   it('returns only records with updatedAt greater than or equal to updatedSince', async () => {
+    // Insert batch A (3 records, triggers set updatedAt)
     await db
       .insert(schema.requestUsage)
       .values([
-        usageRow({ requestId: 'cdc-1', updatedAt: T1 }),
-        usageRow({ requestId: 'cdc-2', updatedAt: T2 }),
-        usageRow({ requestId: 'cdc-3', updatedAt: T3 }),
-        usageRow({ requestId: 'cdc-4', updatedAt: T4 }),
-        usageRow({ requestId: 'cdc-5', updatedAt: T5 }),
+        usageRow({ requestId: 'cdc-1' }),
+        usageRow({ requestId: 'cdc-2' }),
+        usageRow({ requestId: 'cdc-3' }),
       ]);
 
+    // Wait to ensure a different timestamp for batch B
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Insert batch B (2 records, triggers set later updatedAt)
+    await db
+      .insert(schema.requestUsage)
+      .values([usageRow({ requestId: 'cdc-4' }), usageRow({ requestId: 'cdc-5' })]);
+
+    // Read batch A's updatedAt to use as the filter boundary
+    const allResponse = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?fields=requestId,updatedAt&updatedSince=0',
+    });
+    const allRecords = allResponse.json().data;
+    const batchAUpdatedAt = allRecords.find((r: any) => r.requestId === 'cdc-1')!.updatedAt;
+
+    // Query with updatedSince strictly after batch A → only batch B records
     const response = await fastify.inject({
       method: 'GET',
-      url: `/v0/management/usage?updatedSince=${T3}`,
+      url: `/v0/management/usage?updatedSince=${batchAUpdatedAt + 1}`,
     });
 
     const body = response.json();
-    expect(body.total).toBe(3);
-    const ids = body.data.map((r: any) => r.requestId);
-    expect(ids).toEqual(['cdc-3', 'cdc-4', 'cdc-5']);
+    expect(body.total).toBe(2);
+    // Order within a batch (same updatedAt) is not guaranteed;
+    // sort behavior is tested separately
+    const ids = body.data.map((r: any) => r.requestId).sort();
+    expect(ids).toEqual(['cdc-4', 'cdc-5']);
   });
 
   it('sorts by updatedAt ascending when updatedSince is provided', async () => {
-    // Insert records out of updatedAt order to verify sorting
-    await db
-      .insert(schema.requestUsage)
-      .values([
-        usageRow({ requestId: 'sort-ts-5', updatedAt: T5, startTime: Date.now() - 4000 }),
-        usageRow({ requestId: 'sort-ts-1', updatedAt: T1, startTime: Date.now() }),
-        usageRow({ requestId: 'sort-ts-3', updatedAt: T3, startTime: Date.now() - 2000 }),
-      ]);
+    // Insert records one at a time with delays to get distinct updatedAt values
+    await db.insert(schema.requestUsage).values([usageRow({ requestId: 'sort-first' })]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await db.insert(schema.requestUsage).values([usageRow({ requestId: 'sort-middle' })]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await db.insert(schema.requestUsage).values([usageRow({ requestId: 'sort-last' })]);
 
     const response = await fastify.inject({
       method: 'GET',
@@ -666,18 +678,17 @@ describe('GET /v0/management/usage', () => {
 
     const body = response.json();
     const ids = body.data.map((r: any) => r.requestId);
-    // Should be sorted by updatedAt ASC, not by date DESC (the default)
-    expect(ids).toEqual(['sort-ts-1', 'sort-ts-3', 'sort-ts-5']);
+    // Should be sorted by updatedAt ASC, matching insertion order
+    expect(ids).toEqual(['sort-first', 'sort-middle', 'sort-last']);
   });
 
   it('returns all records with updatedSince=0 (initial sync)', async () => {
-    await db
-      .insert(schema.requestUsage)
-      .values([
-        usageRow({ requestId: 'init-1', updatedAt: T1 }),
-        usageRow({ requestId: 'init-2', updatedAt: T2 }),
-        usageRow({ requestId: 'init-3', updatedAt: T3 }),
-      ]);
+    // Insert records one at a time with delays to get distinct updatedAt values
+    await db.insert(schema.requestUsage).values([usageRow({ requestId: 'init-1' })]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await db.insert(schema.requestUsage).values([usageRow({ requestId: 'init-2' })]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await db.insert(schema.requestUsage).values([usageRow({ requestId: 'init-3' })]);
 
     const response = await fastify.inject({
       method: 'GET',
@@ -688,22 +699,25 @@ describe('GET /v0/management/usage', () => {
     expect(body.total).toBe(3);
     expect(body.data).toHaveLength(3);
     // Verify sorted by updatedAt ASC (not the default date DESC)
-    const timestamps = body.data.map((r: any) => r.updatedAt);
-    expect(timestamps).toEqual([T1, T2, T3]);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toEqual(['init-1', 'init-2', 'init-3']);
   });
 
   it('returns empty data when updatedSince exceeds all updatedAt values', async () => {
     await db
       .insert(schema.requestUsage)
       .values([
-        usageRow({ requestId: 'sync-done-1', updatedAt: T1 }),
-        usageRow({ requestId: 'sync-done-2', updatedAt: T2 }),
-        usageRow({ requestId: 'sync-done-3', updatedAt: T3 }),
+        usageRow({ requestId: 'sync-done-1' }),
+        usageRow({ requestId: 'sync-done-2' }),
+        usageRow({ requestId: 'sync-done-3' }),
       ]);
+
+    // Use a future timestamp that exceeds all records' updatedAt
+    const futureTimestamp = Date.now() + 100_000;
 
     const response = await fastify.inject({
       method: 'GET',
-      url: `/v0/management/usage?updatedSince=${T3 + 1}`,
+      url: `/v0/management/usage?updatedSince=${futureTimestamp}`,
     });
 
     const body = response.json();
@@ -712,52 +726,51 @@ describe('GET /v0/management/usage', () => {
   });
 
   it('pages through results with updatedSince and limit in cursor-based fashion', async () => {
-    await db
-      .insert(schema.requestUsage)
-      .values(
-        Array.from({ length: 5 }, (_, i) =>
-          usageRow({ requestId: `page-ts-${i + 1}`, updatedAt: T1 + i * 1000 })
-        )
-      );
+    // Insert 5 records sequentially to get distinct updatedAt values
+    for (let i = 0; i < 5; i++) {
+      await db.insert(schema.requestUsage).values([usageRow({ requestId: `page-ts-${i + 1}` })]);
+      if (i < 4) await new Promise((resolve) => setTimeout(resolve, 10));
+    }
 
-    // First page: updatedSince=0, limit=2 → T1, T2
+    // First page: updatedSince=0, limit=2 → first 2 records
     const page1 = await fastify.inject({
       method: 'GET',
       url: '/v0/management/usage?updatedSince=0&limit=2',
     });
     const body1 = page1.json();
     expect(body1.data).toHaveLength(2);
-    expect(body1.data[0].updatedAt).toBe(T1);
-    expect(body1.data[1].updatedAt).toBe(T1 + 1000);
+    expect(body1.data[0].requestId).toBe('page-ts-1');
+    expect(body1.data[1].requestId).toBe('page-ts-2');
     expect(body1.total).toBe(5);
 
-    // Second page: updatedSince=T2 (overlap), limit=2 → T2, T3
+    // Second page: use last record's updatedAt as cursor (overlap pattern)
+    const cursor1 = body1.data[1].updatedAt;
     const page2 = await fastify.inject({
       method: 'GET',
-      url: `/v0/management/usage?updatedSince=${T1 + 1000}&limit=2`,
+      url: `/v0/management/usage?updatedSince=${cursor1}&limit=2`,
     });
     const body2 = page2.json();
     expect(body2.data).toHaveLength(2);
-    expect(body2.data[0].updatedAt).toBe(T1 + 1000);
-    expect(body2.data[1].updatedAt).toBe(T1 + 2000);
+    // Due to >= semantics, page 1's last record is included (overlap)
+    expect(body2.data[0].requestId).toBe('page-ts-2');
+    expect(body2.data[1].requestId).toBe('page-ts-3');
     expect(body2.total).toBe(4);
 
-    // Third page: updatedSince=T3 (overlap), limit=2 → T3, T4
+    // Third page: advance cursor
+    const cursor2 = body2.data[1].updatedAt;
     const page3 = await fastify.inject({
       method: 'GET',
-      url: `/v0/management/usage?updatedSince=${T1 + 2000}&limit=2`,
+      url: `/v0/management/usage?updatedSince=${cursor2}&limit=2`,
     });
     const body3 = page3.json();
     expect(body3.data).toHaveLength(2);
-    expect(body3.data[0].updatedAt).toBe(T1 + 2000);
-    expect(body3.data[1].updatedAt).toBe(T1 + 3000);
+    expect(body3.data[0].requestId).toBe('page-ts-3');
+    expect(body3.data[1].requestId).toBe('page-ts-4');
     expect(body3.total).toBe(3);
   });
 
   it('includes updatedAt in the API response', async () => {
-    await db
-      .insert(schema.requestUsage)
-      .values([usageRow({ requestId: 'ts-field', updatedAt: T3 })]);
+    await db.insert(schema.requestUsage).values([usageRow({ requestId: 'ts-field' })]);
 
     const response = await fastify.inject({
       method: 'GET',
@@ -766,73 +779,140 @@ describe('GET /v0/management/usage', () => {
 
     const body = response.json();
     expect(body.data).toHaveLength(1);
-    expect(body.data[0].updatedAt).toBe(T3);
+    expect(body.data[0].updatedAt).toBeGreaterThan(0);
   });
 
   it('combines updatedSince with other filters', async () => {
+    // Insert batch A (3 anthropic records)
     await db
       .insert(schema.requestUsage)
       .values([
-        usageRow({ requestId: 'combo-ts-1', updatedAt: T1, provider: 'anthropic' }),
-        usageRow({ requestId: 'combo-ts-2', updatedAt: T2, provider: 'anthropic' }),
-        usageRow({ requestId: 'combo-ts-3', updatedAt: T3, provider: 'anthropic' }),
-        usageRow({ requestId: 'combo-ts-4', updatedAt: T4, provider: 'openai' }),
+        usageRow({ requestId: 'combo-ts-1', provider: 'anthropic' }),
+        usageRow({ requestId: 'combo-ts-2', provider: 'anthropic' }),
+        usageRow({ requestId: 'combo-ts-3', provider: 'anthropic' }),
       ]);
 
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Insert batch B (1 anthropic + 1 openai)
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'combo-ts-4', provider: 'anthropic' }),
+        usageRow({ requestId: 'combo-ts-5', provider: 'openai' }),
+      ]);
+
+    // Read batch A's updatedAt to use as the filter boundary
+    const allResponse = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?fields=requestId,updatedAt&updatedSince=0',
+    });
+    const allRecords = allResponse.json().data;
+    const batchAUpdatedAt = allRecords.find((r: any) => r.requestId === 'combo-ts-1')!.updatedAt;
+
+    // Query: updatedSince after batch A + provider=anthropic → only batch B anthropic record
     const response = await fastify.inject({
       method: 'GET',
-      url: `/v0/management/usage?updatedSince=${T2}&provider=anthropic`,
+      url: `/v0/management/usage?updatedSince=${batchAUpdatedAt + 1}&provider=anthropic`,
     });
 
     const body = response.json();
-    // >= T2 AND provider=anthropic → combo-ts-2 (T2) and combo-ts-3 (T3)
-    expect(body.total).toBe(2);
-    const ids = body.data.map((r: any) => r.requestId);
-    expect(ids).toEqual(['combo-ts-2', 'combo-ts-3']);
+    expect(body.total).toBe(1);
+    expect(body.data[0].requestId).toBe('combo-ts-4');
   });
 
   it('reflects filtered count in total when updatedSince is used', async () => {
+    // Insert batch A (3 records)
     await db
       .insert(schema.requestUsage)
       .values([
-        usageRow({ requestId: 'total-1', updatedAt: T1 }),
-        usageRow({ requestId: 'total-2', updatedAt: T2 }),
-        usageRow({ requestId: 'total-3', updatedAt: T3 }),
-        usageRow({ requestId: 'total-4', updatedAt: T4 }),
-        usageRow({ requestId: 'total-5', updatedAt: T5 }),
+        usageRow({ requestId: 'total-1' }),
+        usageRow({ requestId: 'total-2' }),
+        usageRow({ requestId: 'total-3' }),
       ]);
 
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Insert batch B (2 records)
+    await db
+      .insert(schema.requestUsage)
+      .values([usageRow({ requestId: 'total-4' }), usageRow({ requestId: 'total-5' })]);
+
+    // Read batch A's updatedAt to use as the filter boundary
+    const allResponse = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?fields=requestId,updatedAt&updatedSince=0',
+    });
+    const allRecords = allResponse.json().data;
+    const batchAUpdatedAt = allRecords.find((r: any) => r.requestId === 'total-1')!.updatedAt;
+
+    // Query: updatedSince after batch A → only batch B (2 records)
     const response = await fastify.inject({
       method: 'GET',
-      url: `/v0/management/usage?updatedSince=${T3}`,
+      url: `/v0/management/usage?updatedSince=${batchAUpdatedAt + 1}`,
     });
 
     const body = response.json();
-    // total should be the count of records matching the filter, not all records
-    expect(body.total).toBe(3);
-    expect(body.data).toHaveLength(3);
+    expect(body.total).toBe(2);
+    expect(body.data).toHaveLength(2);
   });
 
   it('respects explicit sortBy when updatedSince is provided', async () => {
     await db
       .insert(schema.requestUsage)
       .values([
-        usageRow({ requestId: 'explicit-sort-1', updatedAt: T1, durationMs: 5000 }),
-        usageRow({ requestId: 'explicit-sort-2', updatedAt: T2, durationMs: 100 }),
-        usageRow({ requestId: 'explicit-sort-3', updatedAt: T3, durationMs: 200 }),
+        usageRow({ requestId: 'explicit-sort-1', durationMs: 5000 }),
+        usageRow({ requestId: 'explicit-sort-2', durationMs: 100 }),
+        usageRow({ requestId: 'explicit-sort-3', durationMs: 200 }),
       ]);
 
     // When sortBy is explicitly provided, it should override the default updatedAt ASC
     // But updatedSince filter should still be applied
     const response = await fastify.inject({
       method: 'GET',
-      url: `/v0/management/usage?updatedSince=${T1}&sortBy=durationMs&sortDir=asc`,
+      url: '/v0/management/usage?updatedSince=0&sortBy=durationMs&sortDir=asc',
     });
 
     const body = response.json();
-    // updatedSince >= T1 → all 3 records; sorted by durationMs asc: 100 (T2), 200 (T3), 5000 (T1)
     expect(body.total).toBe(3);
     const ids = body.data.map((r: any) => r.requestId);
+    // Sorted by durationMs asc: 100 (explicit-sort-2), 200 (explicit-sort-3), 5000 (explicit-sort-1)
     expect(ids).toEqual(['explicit-sort-2', 'explicit-sort-3', 'explicit-sort-1']);
+  });
+
+  it('updatedAt increases when a record is updated', async () => {
+    // Insert a record (trigger sets updatedAt)
+    await db
+      .insert(schema.requestUsage)
+      .values([usageRow({ requestId: 'update-ts', provider: 'openai' })]);
+
+    // Read its updatedAt from the API
+    const initialResponse = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?fields=requestId,updatedAt',
+    });
+    const initialRecord = initialResponse.json().data.find((r: any) => r.requestId === 'update-ts');
+    const initialUpdatedAt = initialRecord.updatedAt;
+    expect(initialUpdatedAt).toBeGreaterThan(0);
+
+    // Wait to ensure a different timestamp
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Update the record (triggers UPDATE trigger → new updatedAt)
+    await db
+      .update(schema.requestUsage)
+      .set({ provider: 'anthropic' })
+      .where(eq(schema.requestUsage.requestId, 'update-ts'));
+
+    // Read its updatedAt again
+    const updatedResponse = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?fields=requestId,updatedAt',
+    });
+    const updatedRecord = updatedResponse.json().data.find((r: any) => r.requestId === 'update-ts');
+    const updatedUpdatedAt = updatedRecord.updatedAt;
+
+    // updatedAt should have increased
+    expect(updatedUpdatedAt).toBeGreaterThan(initialUpdatedAt);
   });
 });

@@ -10,4 +10,7 @@ export const DB_TEST_FILES = [
   'src/services/__tests__/usage-storage-performance.test.ts',
   'src/services/quota/__tests__/quota-enforcer.test.ts',
   'src/services/quota/__tests__/quota-scheduler.test.ts',
+  // Trigger tests must run against both SQLite and Postgres
+  'src/db/__tests__/request-usage-triggers.test.ts',
+  'src/db/__tests__/trigger-migration.test.ts',
 ] as const;

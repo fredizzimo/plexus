@@ -68,6 +68,7 @@ import { McpUsageStorageService } from './services/mcp-proxy/mcp-usage-storage';
 import { QuotaEnforcer } from './services/quota/quota-enforcer';
 import { initializeDatabase } from './db/client';
 import { runMigrations } from './db/migrate';
+import { ensureUpdatedAtTriggers } from './db/trigger-migration';
 import { runEncryptionMigration } from './db/encrypt-migration';
 import { isEncryptionEnabled } from './utils/encryption';
 
@@ -150,6 +151,7 @@ if (process.env.DEBUG === 'true') {
 try {
   initializeDatabase();
   await runMigrations();
+  await ensureUpdatedAtTriggers();
   await runEncryptionMigration();
 } catch (e) {
   logger.error('Failed to initialize database or run migrations', e);
