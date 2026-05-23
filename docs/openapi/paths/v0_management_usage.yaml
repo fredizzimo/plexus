@@ -11,12 +11,35 @@ get:
     Limited principals are force-scoped to their own `apiKey`, regardless
     of query parameters. Admins see all records.
 
+    ## Incremental replication (CDC)
+
+    Use `updatedSince` to fetch only records that have been created or
+    modified since a given checkpoint. Combined with the `updatedAt` field
+    in each record, this enables incremental replication of the usage
+    dataset:
+
+    1. **Initial sync:** `updatedSince=0&limit=50` → page forward until
+       empty, noting the max `updatedAt` value as the checkpoint.
+    2. **Incremental sync:** `updatedSince=<checkpoint - overlapWindow>&limit=50`
+       → page forward until empty, update checkpoint.
+
+    The overlap window (e.g. 30 seconds) re-fetches recently-seen records
+    to catch late-committing transactions. Duplicates across sync cycles
+    are harmless — consumers should upsert by `requestId`.
+
+    When `updatedSince` is provided, the default sort changes to
+    `sortBy=updatedAt&sortDir=asc` (instead of `sortBy=date&sortDir=desc`).
+
     ## Query parameters
 
     - **sortBy** — Field to sort by: `date`, `apiKey`, `provider`,
-      `incomingModelAlias`, `costTotal`, `durationMs`. Default: `date`.
+      `incomingModelAlias`, `costTotal`, `durationMs`, `updatedAt`.
+      Default: `date` (or `updatedAt` when `updatedSince` is provided).
     - **startDate / endDate** — ISO 8601 timestamps. Filter records to
       requests that started within the range.
+    - **updatedSince** — Epoch milliseconds. Returns records where
+      `updatedAt >= updatedSince`. Use `0` for initial sync. See CDC
+      section above for the replication pattern.
     - **fields** — Comma-separated projection (e.g. `requestId,date,costTotal`).
       Unknown field names are silently omitted. When unset, returns all fields.
     - **responseStatus** — Filter by outcome: `success` or `error`.
@@ -47,6 +70,7 @@ get:
           - incomingModelAlias
           - costTotal
           - durationMs
+          - updatedAt
         default: date
     - in: query
       name: sortDir
@@ -113,6 +137,15 @@ get:
       name: maxDurationMs
       schema:
         type: integer
+    - in: query
+      name: updatedSince
+      schema:
+        type: integer
+      description: >
+        Epoch-millisecond timestamp. Returns records where `updatedAt >=
+        updatedSince`. Use `0` for initial sync. When provided, default sort
+        changes to `sortBy=updatedAt&sortDir=asc`. See the CDC section above
+        for the incremental replication pattern.
     - in: query
       name: fields
       schema:

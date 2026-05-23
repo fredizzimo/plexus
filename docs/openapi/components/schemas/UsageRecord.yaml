@@ -300,3 +300,13 @@ properties:
     description: >
       Whether error records exist for this request (mirrors presence in
       `inference_errors` table).
+  updatedAt:
+    type: integer
+    description: >
+      Epoch-millisecond timestamp of the last INSERT or UPDATE on this row,
+      set automatically by database triggers. Used for incremental
+      replication via the `updatedSince` query parameter on the usage
+      endpoint.
+
+      - `0` — Row predates this column (modification time unknown).
+      - Any positive value — The row was last modified at this timestamp.
