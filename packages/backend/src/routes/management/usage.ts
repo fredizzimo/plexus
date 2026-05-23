@@ -49,6 +49,7 @@ const USAGE_FIELDS = new Set([
   'parallelToolCallsEnabled',
   'toolCallsCount',
   'finishReason',
+  'updatedAt',
   'hasDebug',
   'hasError',
 ]);
@@ -64,16 +65,27 @@ export async function registerUsageRoutes(
     'incomingModelAlias',
     'costTotal',
     'durationMs',
+    'updatedAt',
   ]);
 
   fastify.get('/v0/management/usage', async (request, reply) => {
     const query = request.query as any;
     const limit = parseInt(query.limit || '50');
     const offset = parseInt(query.offset || '0');
+    const hasUpdatedSince = query.updatedSince !== undefined;
     const sortBy = sortableFields.has(query.sortBy as UsageSortField)
       ? (query.sortBy as UsageSortField)
-      : 'date';
-    const sortDir: UsageSortDirection = query.sortDir === 'asc' ? 'asc' : 'desc';
+      : hasUpdatedSince
+        ? 'updatedAt'
+        : 'date';
+    const sortDir: UsageSortDirection =
+      query.sortDir === 'asc'
+        ? 'asc'
+        : query.sortDir === 'desc'
+          ? 'desc'
+          : sortBy === 'updatedAt'
+            ? 'asc'
+            : 'desc';
     const rawFields = typeof query.fields === 'string' ? query.fields : '';
     const requestedFields = rawFields
       .split(',')
@@ -94,6 +106,7 @@ export async function registerUsageRoutes(
 
     if (query.minDurationMs) filters.minDurationMs = parseInt(query.minDurationMs);
     if (query.maxDurationMs) filters.maxDurationMs = parseInt(query.maxDurationMs);
+    if (hasUpdatedSince) filters.updatedSince = parseInt(query.updatedSince);
 
     // Limited users are force-scoped to their own key (exact match), regardless
     // of any client-supplied apiKey filter.

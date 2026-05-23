@@ -51,6 +51,9 @@ export interface UsageRecord {
   visionFallthroughModel?: string | null;
   // Energy estimation
   kwhUsed?: number | null;
+  // Timestamp of last INSERT or UPDATE (set by DB triggers) for CDC replication
+  // 0 = row predates this column (unknown modification time)
+  updatedAt: number;
   // Provider-reported cost (from SSE `: cost` comments or response payload)
   // When present, costTotal/costInput/costOutput are overridden with actual values
   providerReportedCost?: number | null;

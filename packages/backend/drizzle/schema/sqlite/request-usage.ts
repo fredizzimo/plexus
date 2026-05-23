@@ -57,11 +57,15 @@ export const requestUsage = sqliteTable(
     kwhUsed: real('kwh_used'),
     // Provider-reported cost (actual cost from provider, e.g. from SSE `: cost` comments)
     providerReportedCost: real('provider_reported_cost'),
+    // Timestamp of last INSERT or UPDATE (set by DB triggers) for CDC replication
+    // Default 0 for existing rows that predate this column; triggers set it on future writes
+    updatedAt: integer('updated_at').notNull().default(0),
   },
   (table) => ({
     dateIdx: index('idx_request_usage_date').on(table.date),
     providerIdx: index('idx_request_usage_provider').on(table.provider),
     requestIdIdx: index('idx_request_usage_request_id').on(table.requestId),
     apiKeyIdx: index('idx_request_usage_api_key').on(table.apiKey, table.startTime),
+    updatedAtIdx: index('idx_request_usage_updated_at').on(table.updatedAt),
   })
 );

@@ -617,4 +617,222 @@ describe('GET /v0/management/usage', () => {
     expect(body.total).toBe(1);
     expect(body.data[0].requestId).toBe('override-mine');
   });
+
+  // ── updatedSince filter (timestamp-based CDC replication) ──────────
+
+  // Fixed epoch-ms timestamps for deterministic test data
+  const T1 = 1_700_000_001_000;
+  const T2 = 1_700_000_002_000;
+  const T3 = 1_700_000_003_000;
+  const T4 = 1_700_000_004_000;
+  const T5 = 1_700_000_005_000;
+
+  it('returns only records with updatedAt greater than or equal to updatedSince', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'cdc-1', updatedAt: T1 }),
+        usageRow({ requestId: 'cdc-2', updatedAt: T2 }),
+        usageRow({ requestId: 'cdc-3', updatedAt: T3 }),
+        usageRow({ requestId: 'cdc-4', updatedAt: T4 }),
+        usageRow({ requestId: 'cdc-5', updatedAt: T5 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?updatedSince=${T3}`,
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(3);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toEqual(['cdc-3', 'cdc-4', 'cdc-5']);
+  });
+
+  it('sorts by updatedAt ascending when updatedSince is provided', async () => {
+    // Insert records out of updatedAt order to verify sorting
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'sort-ts-5', updatedAt: T5, startTime: Date.now() - 4000 }),
+        usageRow({ requestId: 'sort-ts-1', updatedAt: T1, startTime: Date.now() }),
+        usageRow({ requestId: 'sort-ts-3', updatedAt: T3, startTime: Date.now() - 2000 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?updatedSince=0',
+    });
+
+    const body = response.json();
+    const ids = body.data.map((r: any) => r.requestId);
+    // Should be sorted by updatedAt ASC, not by date DESC (the default)
+    expect(ids).toEqual(['sort-ts-1', 'sort-ts-3', 'sort-ts-5']);
+  });
+
+  it('returns all records with updatedSince=0 (initial sync)', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'init-1', updatedAt: T1 }),
+        usageRow({ requestId: 'init-2', updatedAt: T2 }),
+        usageRow({ requestId: 'init-3', updatedAt: T3 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?updatedSince=0',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(3);
+    expect(body.data).toHaveLength(3);
+    // Verify sorted by updatedAt ASC (not the default date DESC)
+    const timestamps = body.data.map((r: any) => r.updatedAt);
+    expect(timestamps).toEqual([T1, T2, T3]);
+  });
+
+  it('returns empty data when updatedSince exceeds all updatedAt values', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'sync-done-1', updatedAt: T1 }),
+        usageRow({ requestId: 'sync-done-2', updatedAt: T2 }),
+        usageRow({ requestId: 'sync-done-3', updatedAt: T3 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?updatedSince=${T3 + 1}`,
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(0);
+    expect(body.data).toEqual([]);
+  });
+
+  it('pages through results with updatedSince and limit in cursor-based fashion', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values(
+        Array.from({ length: 5 }, (_, i) =>
+          usageRow({ requestId: `page-ts-${i + 1}`, updatedAt: T1 + i * 1000 })
+        )
+      );
+
+    // First page: updatedSince=0, limit=2 → T1, T2
+    const page1 = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?updatedSince=0&limit=2',
+    });
+    const body1 = page1.json();
+    expect(body1.data).toHaveLength(2);
+    expect(body1.data[0].updatedAt).toBe(T1);
+    expect(body1.data[1].updatedAt).toBe(T1 + 1000);
+    expect(body1.total).toBe(5);
+
+    // Second page: updatedSince=T2 (overlap), limit=2 → T2, T3
+    const page2 = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?updatedSince=${T1 + 1000}&limit=2`,
+    });
+    const body2 = page2.json();
+    expect(body2.data).toHaveLength(2);
+    expect(body2.data[0].updatedAt).toBe(T1 + 1000);
+    expect(body2.data[1].updatedAt).toBe(T1 + 2000);
+    expect(body2.total).toBe(4);
+
+    // Third page: updatedSince=T3 (overlap), limit=2 → T3, T4
+    const page3 = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?updatedSince=${T1 + 2000}&limit=2`,
+    });
+    const body3 = page3.json();
+    expect(body3.data).toHaveLength(2);
+    expect(body3.data[0].updatedAt).toBe(T1 + 2000);
+    expect(body3.data[1].updatedAt).toBe(T1 + 3000);
+    expect(body3.total).toBe(3);
+  });
+
+  it('includes updatedAt in the API response', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([usageRow({ requestId: 'ts-field', updatedAt: T3 })]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage',
+    });
+
+    const body = response.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].updatedAt).toBe(T3);
+  });
+
+  it('combines updatedSince with other filters', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'combo-ts-1', updatedAt: T1, provider: 'anthropic' }),
+        usageRow({ requestId: 'combo-ts-2', updatedAt: T2, provider: 'anthropic' }),
+        usageRow({ requestId: 'combo-ts-3', updatedAt: T3, provider: 'anthropic' }),
+        usageRow({ requestId: 'combo-ts-4', updatedAt: T4, provider: 'openai' }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?updatedSince=${T2}&provider=anthropic`,
+    });
+
+    const body = response.json();
+    // >= T2 AND provider=anthropic → combo-ts-2 (T2) and combo-ts-3 (T3)
+    expect(body.total).toBe(2);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toEqual(['combo-ts-2', 'combo-ts-3']);
+  });
+
+  it('reflects filtered count in total when updatedSince is used', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'total-1', updatedAt: T1 }),
+        usageRow({ requestId: 'total-2', updatedAt: T2 }),
+        usageRow({ requestId: 'total-3', updatedAt: T3 }),
+        usageRow({ requestId: 'total-4', updatedAt: T4 }),
+        usageRow({ requestId: 'total-5', updatedAt: T5 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?updatedSince=${T3}`,
+    });
+
+    const body = response.json();
+    // total should be the count of records matching the filter, not all records
+    expect(body.total).toBe(3);
+    expect(body.data).toHaveLength(3);
+  });
+
+  it('respects explicit sortBy when updatedSince is provided', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'explicit-sort-1', updatedAt: T1, durationMs: 5000 }),
+        usageRow({ requestId: 'explicit-sort-2', updatedAt: T2, durationMs: 100 }),
+        usageRow({ requestId: 'explicit-sort-3', updatedAt: T3, durationMs: 200 }),
+      ]);
+
+    // When sortBy is explicitly provided, it should override the default updatedAt ASC
+    // But updatedSince filter should still be applied
+    const response = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?updatedSince=${T1}&sortBy=durationMs&sortDir=asc`,
+    });
+
+    const body = response.json();
+    // updatedSince >= T1 → all 3 records; sorted by durationMs asc: 100 (T2), 200 (T3), 5000 (T1)
+    expect(body.total).toBe(3);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toEqual(['explicit-sort-2', 'explicit-sort-3', 'explicit-sort-1']);
+  });
 });

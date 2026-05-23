@@ -40,6 +40,14 @@ export interface UsageFilters {
   minDurationMs?: number;
   maxDurationMs?: number;
   responseStatus?: string;
+  /**
+   * Only return records with `updatedAt >= updatedSince`.
+   * Used for CDC replication: each batch's max updatedAt becomes the next
+   * `updatedSince` cursor. The `>=` semantics enables the overlap-window
+   * pattern — consumers re-fetch the boundary record across sync cycles
+   * and deduplicate by `requestId`.
+   */
+  updatedSince?: number;
 }
 
 export interface PaginationOptions {
@@ -55,7 +63,8 @@ export type UsageSortField =
   | 'provider'
   | 'incomingModelAlias'
   | 'costTotal'
-  | 'durationMs';
+  | 'durationMs'
+  | 'updatedAt';
 
 export type UsageSortDirection = 'asc' | 'desc';
 
@@ -550,6 +559,9 @@ export class UsageStorageService extends EventEmitter {
     if (filters.responseStatus) {
       conditions.push(eq(schema.requestUsage.responseStatus, filters.responseStatus));
     }
+    if (filters.updatedSince !== undefined) {
+      conditions.push(gte(schema.requestUsage.updatedAt, filters.updatedSince));
+    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -560,6 +572,7 @@ export class UsageStorageService extends EventEmitter {
       incomingModelAlias: schema.requestUsage.incomingModelAlias,
       costTotal: schema.requestUsage.costTotal,
       durationMs: schema.requestUsage.durationMs,
+      updatedAt: schema.requestUsage.updatedAt,
     } satisfies Record<UsageSortField, any>;
     const sortBy =
       pagination.sortBy && sortFieldMap[pagination.sortBy] ? pagination.sortBy : 'date';
@@ -611,6 +624,7 @@ export class UsageStorageService extends EventEmitter {
           toolCallsCount: schema.requestUsage.toolCallsCount,
           finishReason: schema.requestUsage.finishReason,
           kwhUsed: schema.requestUsage.kwhUsed,
+          updatedAt: schema.requestUsage.updatedAt,
           hasDebug: sql<boolean>`EXISTS(SELECT 1 FROM ${schema.debugLogs} dl WHERE dl.request_id = request_usage.request_id)`,
           hasError: sql<boolean>`EXISTS(SELECT 1 FROM ${schema.inferenceErrors} ie WHERE ie.request_id = request_usage.request_id)`,
         })
@@ -668,6 +682,7 @@ export class UsageStorageService extends EventEmitter {
         toolCallsCount: row.toolCallsCount,
         finishReason: row.finishReason,
         kwhUsed: row.kwhUsed,
+        updatedAt: row.updatedAt,
       }));
 
       const countResults = await db
