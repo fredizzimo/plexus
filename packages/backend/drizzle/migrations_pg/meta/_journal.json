@@ -414,6 +414,13 @@
       "when": 1779614789731,
       "tag": "0058_add_updated_at_to_request_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1779614915422,
+      "tag": "0059_add_provider_energy_details",
+      "breakpoints": true
     }
   ]
 }
