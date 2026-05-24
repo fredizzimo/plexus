@@ -9,12 +9,12 @@ function createUsageRecord(overrides: Partial<UsageRecord> = {}): Partial<UsageR
     tokensInput: 100,
     tokensOutput: 50,
     kwhUsed: null,
-    avgPowerWatts: null,
-    durationSeconds: null,
-    attributionMethod: null,
-    attributionRatio: null,
-    ratioWasCapped: null,
-    uncappedEnergyKwh: null,
+    energyAvgPowerWatts: null,
+    energyDurationSeconds: null,
+    energyAttributionMethod: null,
+    energyAttributionRatio: null,
+    energyRatioWasCapped: null,
+    energyUncappedKwh: null,
     ...overrides,
   };
 }
@@ -159,15 +159,15 @@ describe('applyProviderReportedEnergy', () => {
         defaultFallback
       );
 
-      expect(record.avgPowerWatts).toBe(2914);
-      expect(record.durationSeconds).toBe(0.989);
-      expect(record.attributionMethod).toBe('counter_prorated_multi_gpu_8');
-      expect(record.attributionRatio).toBe(0.07);
-      expect(record.ratioWasCapped).toBe(1);
-      expect(record.uncappedEnergyKwh).toBe(0.000800355);
+      expect(record.energyAvgPowerWatts).toBe(2914);
+      expect(record.energyDurationSeconds).toBe(0.989);
+      expect(record.energyAttributionMethod).toBe('counter_prorated_multi_gpu_8');
+      expect(record.energyAttributionRatio).toBe(0.07);
+      expect(record.energyRatioWasCapped).toBe(1);
+      expect(record.energyUncappedKwh).toBe(0.000800355);
     });
 
-    test('sets ratioWasCapped as 0 when ratio_was_capped is false', () => {
+    test('sets energyRatioWasCapped as 0 when ratio_was_capped is false', () => {
       const record = createUsageRecord();
       applyProviderReportedEnergy(
         record,
@@ -178,7 +178,7 @@ describe('applyProviderReportedEnergy', () => {
         defaultFallback
       );
 
-      expect(record.ratioWasCapped).toBe(0);
+      expect(record.energyRatioWasCapped).toBe(0);
     });
 
     test('leaves missing detail fields null when partial energy data provided', () => {
@@ -192,12 +192,12 @@ describe('applyProviderReportedEnergy', () => {
         defaultFallback
       );
 
-      expect(record.avgPowerWatts).toBe(2914);
-      expect(record.durationSeconds).toBeNull();
-      expect(record.attributionMethod).toBeNull();
-      expect(record.attributionRatio).toBeNull();
-      expect(record.ratioWasCapped).toBeNull();
-      expect(record.uncappedEnergyKwh).toBeNull();
+      expect(record.energyAvgPowerWatts).toBe(2914);
+      expect(record.energyDurationSeconds).toBeNull();
+      expect(record.energyAttributionMethod).toBeNull();
+      expect(record.energyAttributionRatio).toBeNull();
+      expect(record.energyRatioWasCapped).toBeNull();
+      expect(record.energyUncappedKwh).toBeNull();
     });
 
     test('leaves detail fields null when energy_kwh is invalid', () => {
@@ -213,8 +213,8 @@ describe('applyProviderReportedEnergy', () => {
       );
 
       expect(record.kwhUsed).toBeNull();
-      expect(record.avgPowerWatts).toBeNull();
-      expect(record.durationSeconds).toBeNull();
+      expect(record.energyAvgPowerWatts).toBeNull();
+      expect(record.energyDurationSeconds).toBeNull();
     });
   });
 });
