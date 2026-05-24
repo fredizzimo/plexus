@@ -9,8 +9,8 @@ import { TransformerFactory } from '../services/transformer-factory';
 import { DebugLoggingInspector, UsageInspector } from './inspectors';
 import { Readable } from 'stream';
 import { DebugManager } from './debug-manager';
-import { estimateKwhUsed } from './inference-energy';
 import { applyProviderReportedCost, applyUsageCostDetails } from '../utils/provider-cost';
+import { applyProviderReportedEnergy } from '../utils/provider-energy';
 import { extractUsageCostDetails } from '../utils/usage-normalizer';
 import { StallInspector, type StallConfig } from './inspectors/stall-inspector';
 import { DEFAULT_GPU_PARAMS, DEFAULT_MODEL } from '@plexus/shared';
@@ -524,23 +524,16 @@ async function finalizeUsage(
   }
 
   // Use provider-reported energy if available, otherwise estimate
-  // Some providers emit `: energy {"energy_kwh": ...}` as SSE comments
-  if (reconstructed?.providerReportedEnergy?.energy_kwh != null) {
-    const energyKwh = Number(reconstructed.providerReportedEnergy.energy_kwh);
-    if (!isNaN(energyKwh) && energyKwh >= 0) {
-      usageRecord.kwhUsed = Number(energyKwh.toFixed(10));
+  applyProviderReportedEnergy(
+    usageRecord,
+    reconstructed?.providerReportedEnergy,
+    {
+      tokensInput: usageRecord.tokensInput ?? 0,
+      tokensOutput: usageRecord.tokensOutput ?? 0,
+      modelParams: unifiedResponse.plexus?.modelParams ?? DEFAULT_MODEL,
+      gpuParams: unifiedResponse.plexus?.gpuParams ?? DEFAULT_GPU_PARAMS,
     }
-  } else {
-    // Estimate energy consumption using resolved GPU and model params from dispatcher
-    const plexusGpuParams = unifiedResponse.plexus?.gpuParams ?? DEFAULT_GPU_PARAMS;
-    const plexusModelParams = unifiedResponse.plexus?.modelParams ?? DEFAULT_MODEL;
-    usageRecord.kwhUsed = estimateKwhUsed(
-      usageRecord.tokensInput ?? 0,
-      usageRecord.tokensOutput ?? 0,
-      plexusModelParams,
-      plexusGpuParams
-    );
-  }
+  );
 
   // Persist usage record to database
   await usageStorage.saveRequest(usageRecord as UsageRecord);

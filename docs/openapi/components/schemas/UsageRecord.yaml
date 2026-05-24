@@ -236,9 +236,59 @@ properties:
       - number
       - 'null'
     description: >
-      Estimated energy consumption in kilowatt-hours. Calculated from
-      `model_architecture` token estimates and provider-specific energy
-      coefficients. Requires `model_architecture` to be set on the alias.
+      Energy consumption in kilowatt-hours. When provider-reported energy
+      is available (via Neuralwatt SSE comments), this is the provider's
+      `energy_kwh` value. Otherwise, estimated from `model_architecture`
+      token counts and provider-specific energy coefficients.
+  avgPowerWatts:
+    type:
+      - number
+      - 'null'
+    description: >
+      Provider-reported average power draw in watts during the request.
+      Null when provider-reported energy is unavailable or `energy_kwh`
+      was invalid.
+  durationSeconds:
+    type:
+      - number
+      - 'null'
+    description: >
+      Provider-reported inference duration in seconds. Null when
+      provider-reported energy is unavailable or `energy_kwh` was invalid.
+  attributionMethod:
+    type:
+      - string
+      - 'null'
+    description: >
+      Provider-reported energy attribution method (e.g.
+      `counter_prorated_multi_gpu_8`). Describes how energy was
+      allocated to this request. Null when provider-reported energy
+      is unavailable or `energy_kwh` was invalid.
+  attributionRatio:
+    type:
+      - number
+      - 'null'
+    description: >
+      Provider-reported attribution ratio (0–1) indicating the fraction
+      of total GPU energy attributed to this request. Null when
+      provider-reported energy is unavailable or `energy_kwh` was invalid.
+  ratioWasCapped:
+    type:
+      - boolean
+      - 'null'
+    description: >
+      Whether the attribution ratio was capped at a maximum value
+      (e.g. when the raw ratio exceeded a threshold). Null when
+      provider-reported energy is unavailable or `energy_kwh` was invalid.
+  uncappedEnergyKwh:
+    type:
+      - number
+      - 'null'
+    description: >
+      Provider-reported energy in kilowatt-hours before attribution
+      ratio was applied (i.e. the full GPU energy, not the prorated
+      share). Null when provider-reported energy is unavailable or
+      `energy_kwh` was invalid.
   isStreamed:
     type: boolean
     description: Whether the response was streamed (SSE).

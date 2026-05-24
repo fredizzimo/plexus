@@ -12,8 +12,8 @@ import {
   normalizeOpenAIResponsesUsage,
   extractUsageCostDetails,
 } from '../../utils/usage-normalizer';
-import { estimateKwhUsed } from '../inference-energy';
 import { applyProviderReportedCost, applyUsageCostDetails } from '../../utils/provider-cost';
+import { applyProviderReportedEnergy } from '../../utils/provider-energy';
 import { DEFAULT_MODEL, DEFAULT_GPU_PARAMS } from '@plexus/shared';
 import { recordQuotaUsage } from '../quota/quota-middleware';
 
@@ -160,21 +160,16 @@ export class UsageInspector extends PassThrough {
       }
 
       // Use provider-reported energy if available, otherwise estimate
-      // Some providers emit `: energy {"energy_kwh": ...}` as SSE comments
-      if (reconstructed?.providerReportedEnergy?.energy_kwh != null) {
-        const energyKwh = Number(reconstructed.providerReportedEnergy.energy_kwh);
-        if (!isNaN(energyKwh) && energyKwh >= 0) {
-          this.usageRecord.kwhUsed = Number(energyKwh.toFixed(10));
+      applyProviderReportedEnergy(
+        this.usageRecord,
+        reconstructed?.providerReportedEnergy,
+        {
+          tokensInput: stats.inputTokens,
+          tokensOutput: stats.outputTokens,
+          modelParams: this.modelParams,
+          gpuParams: this.gpuParams,
         }
-      } else {
-        // Estimate energy consumption using resolved GPU and model params
-        this.usageRecord.kwhUsed = estimateKwhUsed(
-          stats.inputTokens,
-          stats.outputTokens,
-          this.modelParams,
-          this.gpuParams
-        );
-      }
+      );
 
       // Fire-and-forget: saveRequest is async but _flush is synchronous
       // Attach error handler to prevent unhandled promise rejections

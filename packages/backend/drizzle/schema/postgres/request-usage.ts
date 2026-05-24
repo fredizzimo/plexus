@@ -54,6 +54,13 @@ export const requestUsage = pgTable(
     visionFallthroughModel: text('vision_fallthrough_model'),
     // Energy estimation
     kwhUsed: real('kwh_used'),
+    // Provider-reported energy detail fields (from SSE `: energy` comments)
+    avgPowerWatts: real('avg_power_watts'),
+    durationSeconds: real('duration_seconds'),
+    attributionMethod: text('attribution_method'),
+    attributionRatio: real('attribution_ratio'),
+    ratioWasCapped: integer('ratio_was_capped'),
+    uncappedEnergyKwh: real('uncapped_energy_kwh'),
     // Provider-reported cost (actual cost from provider, e.g. from SSE `: cost` comments)
     providerReportedCost: real('provider_reported_cost'),
     // Timestamp of last INSERT or UPDATE (set by DB triggers) for CDC replication
