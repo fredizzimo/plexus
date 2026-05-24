@@ -240,7 +240,7 @@ properties:
       is available (via Neuralwatt SSE comments), this is the provider's
       `energy_kwh` value. Otherwise, estimated from `model_architecture`
       token counts and provider-specific energy coefficients.
-  avgPowerWatts:
+  energyAvgPowerWatts:
     type:
       - number
       - 'null'
@@ -248,14 +248,14 @@ properties:
       Provider-reported average power draw in watts during the request.
       Null when provider-reported energy is unavailable or `energy_kwh`
       was invalid.
-  durationSeconds:
+  energyDurationSeconds:
     type:
       - number
       - 'null'
     description: >
       Provider-reported inference duration in seconds. Null when
       provider-reported energy is unavailable or `energy_kwh` was invalid.
-  attributionMethod:
+  energyAttributionMethod:
     type:
       - string
       - 'null'
@@ -264,7 +264,7 @@ properties:
       `counter_prorated_multi_gpu_8`). Describes how energy was
       allocated to this request. Null when provider-reported energy
       is unavailable or `energy_kwh` was invalid.
-  attributionRatio:
+  energyAttributionRatio:
     type:
       - number
       - 'null'
@@ -272,7 +272,7 @@ properties:
       Provider-reported attribution ratio (0–1) indicating the fraction
       of total GPU energy attributed to this request. Null when
       provider-reported energy is unavailable or `energy_kwh` was invalid.
-  ratioWasCapped:
+  energyRatioWasCapped:
     type:
       - boolean
       - 'null'
@@ -280,7 +280,7 @@ properties:
       Whether the attribution ratio was capped at a maximum value
       (e.g. when the raw ratio exceeded a threshold). Null when
       provider-reported energy is unavailable or `energy_kwh` was invalid.
-  uncappedEnergyKwh:
+  energyUncappedKwh:
     type:
       - number
       - 'null'

@@ -52,12 +52,12 @@ export interface UsageRecord {
   // Energy estimation
   kwhUsed?: number | null;
   // Provider-reported energy detail fields (from SSE `: energy` comments)
-  avgPowerWatts?: number | null;
-  durationSeconds?: number | null;
-  attributionMethod?: string | null;
-  attributionRatio?: number | null;
-  ratioWasCapped?: number | null; // 0 or 1 (SQLite/Postgres boolean convention)
-  uncappedEnergyKwh?: number | null;
+  energyAvgPowerWatts?: number | null;
+  energyDurationSeconds?: number | null;
+  energyAttributionMethod?: string | null;
+  energyAttributionRatio?: number | null;
+  energyRatioWasCapped?: number | null; // 0 or 1 (SQLite/Postgres boolean convention)
+  energyUncappedKwh?: number | null;
   // Timestamp of last INSERT or UPDATE (set by DB triggers) for CDC replication
   // 0 = row predates this column (unknown modification time)
   updatedAt: number;

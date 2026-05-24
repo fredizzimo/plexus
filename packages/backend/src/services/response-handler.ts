@@ -524,16 +524,12 @@ async function finalizeUsage(
   }
 
   // Use provider-reported energy if available, otherwise estimate
-  applyProviderReportedEnergy(
-    usageRecord,
-    reconstructed?.providerReportedEnergy,
-    {
-      tokensInput: usageRecord.tokensInput ?? 0,
-      tokensOutput: usageRecord.tokensOutput ?? 0,
-      modelParams: unifiedResponse.plexus?.modelParams ?? DEFAULT_MODEL,
-      gpuParams: unifiedResponse.plexus?.gpuParams ?? DEFAULT_GPU_PARAMS,
-    }
-  );
+  applyProviderReportedEnergy(usageRecord, reconstructed?.providerReportedEnergy, {
+    tokensInput: usageRecord.tokensInput ?? 0,
+    tokensOutput: usageRecord.tokensOutput ?? 0,
+    modelParams: unifiedResponse.plexus?.modelParams ?? DEFAULT_MODEL,
+    gpuParams: unifiedResponse.plexus?.gpuParams ?? DEFAULT_GPU_PARAMS,
+  });
 
   // Persist usage record to database
   await usageStorage.saveRequest(usageRecord as UsageRecord);

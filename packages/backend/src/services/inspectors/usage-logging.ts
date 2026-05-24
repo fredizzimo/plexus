@@ -160,16 +160,12 @@ export class UsageInspector extends PassThrough {
       }
 
       // Use provider-reported energy if available, otherwise estimate
-      applyProviderReportedEnergy(
-        this.usageRecord,
-        reconstructed?.providerReportedEnergy,
-        {
-          tokensInput: stats.inputTokens,
-          tokensOutput: stats.outputTokens,
-          modelParams: this.modelParams,
-          gpuParams: this.gpuParams,
-        }
-      );
+      applyProviderReportedEnergy(this.usageRecord, reconstructed?.providerReportedEnergy, {
+        tokensInput: stats.inputTokens,
+        tokensOutput: stats.outputTokens,
+        modelParams: this.modelParams,
+        gpuParams: this.gpuParams,
+      });
 
       // Fire-and-forget: saveRequest is async but _flush is synchronous
       // Attach error handler to prevent unhandled promise rejections

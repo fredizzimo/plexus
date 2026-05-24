@@ -32,22 +32,22 @@ export function applyProviderReportedEnergy(
 
       // Set provider-reported energy detail fields
       if (energyData.avg_power_watts != null) {
-        usageRecord.avgPowerWatts = energyData.avg_power_watts;
+        usageRecord.energyAvgPowerWatts = energyData.avg_power_watts;
       }
       if (energyData.duration_seconds != null) {
-        usageRecord.durationSeconds = energyData.duration_seconds;
+        usageRecord.energyDurationSeconds = energyData.duration_seconds;
       }
       if (energyData.attribution_method != null) {
-        usageRecord.attributionMethod = energyData.attribution_method;
+        usageRecord.energyAttributionMethod = energyData.attribution_method;
       }
       if (energyData.attribution_ratio != null) {
-        usageRecord.attributionRatio = energyData.attribution_ratio;
+        usageRecord.energyAttributionRatio = energyData.attribution_ratio;
       }
       if (energyData.ratio_was_capped != null) {
-        usageRecord.ratioWasCapped = energyData.ratio_was_capped ? 1 : 0;
+        usageRecord.energyRatioWasCapped = energyData.ratio_was_capped ? 1 : 0;
       }
       if (energyData.uncapped_energy_kwh != null) {
-        usageRecord.uncappedEnergyKwh = energyData.uncapped_energy_kwh;
+        usageRecord.energyUncappedKwh = energyData.uncapped_energy_kwh;
       }
     }
   } else {
