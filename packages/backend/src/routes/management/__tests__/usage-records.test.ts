@@ -413,6 +413,158 @@ describe('GET /v0/management/usage', () => {
     expect(body.data[0].requestId).toBe('end-old');
   });
 
+  // ── startTime / endTime filters (epoch ms on startTime column) ────
+
+  it('filters by startTime with epoch millisecond value', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'st-old', startTime: 1_735_689_600_000 }),
+        usageRow({ requestId: 'st-new', startTime: 1_748_784_000_000 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?startTime=1740000000000',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(1);
+    expect(body.data[0].requestId).toBe('st-new');
+  });
+
+  it('includes records at the exact startTime boundary', async () => {
+    const boundary = 1_748_784_000_000;
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'st-before', startTime: boundary - 1 }),
+        usageRow({ requestId: 'st-exact', startTime: boundary }),
+        usageRow({ requestId: 'st-after', startTime: boundary + 1 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?startTime=${boundary}`,
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(2);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toContain('st-exact');
+    expect(ids).toContain('st-after');
+  });
+
+  it('filters by endTime with epoch millisecond value', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'et-old', startTime: 1_735_689_600_000 }),
+        usageRow({ requestId: 'et-new', startTime: 1_748_784_000_000 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?endTime=1740000000000',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(1);
+    expect(body.data[0].requestId).toBe('et-old');
+  });
+
+  it('includes records at the exact endTime boundary', async () => {
+    const boundary = 1_748_784_000_000;
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'et-before', startTime: boundary - 1 }),
+        usageRow({ requestId: 'et-exact', startTime: boundary }),
+        usageRow({ requestId: 'et-after', startTime: boundary + 1 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: `/v0/management/usage?endTime=${boundary}`,
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(2);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toContain('et-before');
+    expect(ids).toContain('et-exact');
+  });
+
+  it('combines startTime and endTime for a range', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'range-before', startTime: 1_735_689_600_000 }),
+        usageRow({ requestId: 'range-inside', startTime: 1_740_000_000_000 }),
+        usageRow({ requestId: 'range-after', startTime: 1_748_784_000_000 }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?startTime=1735689600000&endTime=1740000000000',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(2);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toContain('range-before');
+    expect(ids).toContain('range-inside');
+  });
+
+  it('combines startTime/endTime with responseStatus filter', async () => {
+    await db.insert(schema.requestUsage).values([
+      usageRow({
+        requestId: 'combo-st-1',
+        startTime: 1_740_000_000_000,
+        responseStatus: 'success',
+      }),
+      usageRow({
+        requestId: 'combo-st-2',
+        startTime: 1_740_000_000_000,
+        responseStatus: 'error',
+      }),
+      usageRow({
+        requestId: 'combo-st-3',
+        startTime: 1_748_784_000_000,
+        responseStatus: 'success',
+      }),
+    ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?startTime=1735000000000&endTime=1741000000000&responseStatus=success',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(1);
+    expect(body.data[0].requestId).toBe('combo-st-1');
+  });
+
+  it('returns 400 when both startDate and startTime are provided', async () => {
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?startDate=2025-06-01&startTime=1740000000000',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/startDate.*startTime/i);
+  });
+
+  it('returns 400 when both endDate and endTime are provided', async () => {
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?endDate=2025-06-01&endTime=1740000000000',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/endDate.*endTime/i);
+  });
+
   it('filters by apiKey with substring match by default', async () => {
     await db
       .insert(schema.requestUsage)

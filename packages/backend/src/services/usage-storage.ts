@@ -25,6 +25,8 @@ export interface ProgressUpdate {
 export interface UsageFilters {
   startDate?: string;
   endDate?: string;
+  startTime?: number;
+  endTime?: number;
   apiKey?: string;
   /**
    * How to match the `apiKey` filter. Defaults to 'like' (substring match) for
@@ -514,6 +516,12 @@ export class UsageStorageService extends EventEmitter {
     }
     if (filters.endDate) {
       conditions.push(lte(schema.requestUsage.date, filters.endDate));
+    }
+    if (filters.startTime !== undefined) {
+      conditions.push(gte(schema.requestUsage.startTime, filters.startTime));
+    }
+    if (filters.endTime !== undefined) {
+      conditions.push(lte(schema.requestUsage.startTime, filters.endTime));
     }
     if (filters.incomingApiType) {
       conditions.push(eq(schema.requestUsage.incomingApiType, filters.incomingApiType));

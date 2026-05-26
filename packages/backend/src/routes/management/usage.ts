@@ -80,6 +80,15 @@ export async function registerUsageRoutes(
       .map((field: string) => field.trim())
       .filter((field: string) => USAGE_FIELDS.has(field));
 
+    // Reject conflicting date/time params — mixing string-based (startDate/endDate)
+    // with epoch-ms-based (startTime/endTime) filters is ambiguous and likely a bug.
+    if (query.startDate && query.startTime !== undefined) {
+      return reply.code(400).send({ error: 'Cannot use both startDate and startTime' });
+    }
+    if (query.endDate && query.endTime !== undefined) {
+      return reply.code(400).send({ error: 'Cannot use both endDate and endTime' });
+    }
+
     const filters: any = {
       startDate: query.startDate,
       endDate: query.endDate,
@@ -92,6 +101,8 @@ export async function registerUsageRoutes(
       responseStatus: query.responseStatus,
     };
 
+    if (query.startTime !== undefined) filters.startTime = parseInt(query.startTime);
+    if (query.endTime !== undefined) filters.endTime = parseInt(query.endTime);
     if (query.minDurationMs) filters.minDurationMs = parseInt(query.minDurationMs);
     if (query.maxDurationMs) filters.maxDurationMs = parseInt(query.maxDurationMs);
 
