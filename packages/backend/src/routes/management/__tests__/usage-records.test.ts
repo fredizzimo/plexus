@@ -637,6 +637,101 @@ describe('GET /v0/management/usage', () => {
     expect(body.data[0].requestId).toBe('status-err');
   });
 
+  // ── Comma-separated responseStatus filter ─────────────────────────────
+
+  it('filters by comma-separated responseStatus values', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'multi-ok', responseStatus: 'success' }),
+        usageRow({ requestId: 'multi-err', responseStatus: 'error' }),
+        usageRow({ requestId: 'multi-pending', responseStatus: 'pending' }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?responseStatus=success,error',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(2);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toContain('multi-ok');
+    expect(ids).toContain('multi-err');
+  });
+
+  it('trims whitespace around comma-separated responseStatus values', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'trim-ok', responseStatus: 'success' }),
+        usageRow({ requestId: 'trim-err', responseStatus: 'error' }),
+        usageRow({ requestId: 'trim-pending', responseStatus: 'pending' }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?responseStatus=success , error',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(2);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toContain('trim-ok');
+    expect(ids).toContain('trim-err');
+  });
+
+  it('ignores empty values in comma-separated responseStatus', async () => {
+    await db
+      .insert(schema.requestUsage)
+      .values([
+        usageRow({ requestId: 'empty-ok', responseStatus: 'success' }),
+        usageRow({ requestId: 'empty-err', responseStatus: 'error' }),
+      ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?responseStatus=success,,error',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(2);
+  });
+
+  it('combines comma-separated responseStatus with other filters', async () => {
+    await db.insert(schema.requestUsage).values([
+      usageRow({
+        requestId: 'combo-rs-1',
+        startTime: 1_740_000_000_000,
+        provider: 'anthropic',
+        responseStatus: 'success',
+      }),
+      usageRow({
+        requestId: 'combo-rs-2',
+        startTime: 1_740_000_000_000,
+        provider: 'anthropic',
+        responseStatus: 'error',
+      }),
+      usageRow({
+        requestId: 'combo-rs-3',
+        startTime: 1_748_784_000_000,
+        provider: 'openai',
+        responseStatus: 'success',
+      }),
+    ]);
+
+    const response = await fastify.inject({
+      method: 'GET',
+      url: '/v0/management/usage?startTime=1735000000000&endTime=1741000000000&responseStatus=success,error&provider=anthropic',
+    });
+
+    const body = response.json();
+    expect(body.total).toBe(2);
+    const ids = body.data.map((r: any) => r.requestId);
+    expect(ids).toContain('combo-rs-1');
+    expect(ids).toContain('combo-rs-2');
+  });
+
   it('filters by minDurationMs', async () => {
     await db
       .insert(schema.requestUsage)

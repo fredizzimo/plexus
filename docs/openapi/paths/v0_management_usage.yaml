@@ -24,7 +24,10 @@ get:
       consistent with the summary and concurrency endpoints.
     - **fields** — Comma-separated projection (e.g. `requestId,date,costTotal`).
       Unknown field names are silently omitted. When unset, returns all fields.
-    - **responseStatus** — Filter by outcome: `success` or `error`.
+    - **responseStatus** — Filter by outcome. Accepts a single value or a
+      comma-separated list (e.g. `success`, `success,error,pending`).
+      Allowed values: `success`, `error`, `pending`, `cancelled`, `timeout`,
+      `stall`.
     - **minDurationMs / maxDurationMs** — Filter by request duration range.
 
     **Mixing date and time params is not allowed** — combining `startDate` with
@@ -120,13 +123,11 @@ get:
       name: responseStatus
       schema:
         type: string
-        enum:
-          - success
-          - error
-          - pending
-          - cancelled
-          - timeout
-          - stall
+      description: >
+        Filter by outcome. Accepts a single value or a comma-separated list
+        (e.g. `success` or `success,error,pending`). Whitespace around
+        commas is trimmed. Allowed values: `success`, `error`, `pending`,
+        `cancelled`, `timeout`, `stall`.
     - in: query
       name: minDurationMs
       schema:

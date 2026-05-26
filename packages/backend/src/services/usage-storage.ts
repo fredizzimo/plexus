@@ -3,7 +3,7 @@ import { UsageRecord } from '../types/usage';
 import { getDatabase, getSchema } from '../db/client';
 import { NewRequestUsage } from '../db/types';
 import { EventEmitter } from 'node:events';
-import { eq, and, gte, lte, like, desc, asc, sql, getTableName } from 'drizzle-orm';
+import { eq, and, gte, lte, like, desc, asc, sql, getTableName, inArray } from 'drizzle-orm';
 import { DebugLogRecord } from './debug-manager';
 import { getCurrentKeyName } from './request-context';
 import { estimateKwhUsed } from './inference-energy';
@@ -41,7 +41,7 @@ export interface UsageFilters {
   outgoingApiType?: string;
   minDurationMs?: number;
   maxDurationMs?: number;
-  responseStatus?: string;
+  responseStatus?: string | string[];
 }
 
 export interface PaginationOptions {
@@ -556,7 +556,14 @@ export class UsageStorageService extends EventEmitter {
       conditions.push(lte(schema.requestUsage.durationMs, filters.maxDurationMs));
     }
     if (filters.responseStatus) {
-      conditions.push(eq(schema.requestUsage.responseStatus, filters.responseStatus));
+      const values = Array.isArray(filters.responseStatus)
+        ? filters.responseStatus
+        : [filters.responseStatus];
+      if (values.length === 1) {
+        conditions.push(eq(schema.requestUsage.responseStatus, values[0]));
+      } else if (values.length > 1) {
+        conditions.push(inArray(schema.requestUsage.responseStatus, values));
+      }
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

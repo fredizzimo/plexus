@@ -98,7 +98,13 @@ export async function registerUsageRoutes(
       incomingModelAlias: query.incomingModelAlias,
       selectedModelName: query.selectedModelName,
       outgoingApiType: query.outgoingApiType,
-      responseStatus: query.responseStatus,
+      responseStatus:
+        typeof query.responseStatus === 'string'
+          ? query.responseStatus
+              .split(',')
+              .map((v: string) => v.trim())
+              .filter((v: string) => v.length > 0)
+          : query.responseStatus,
     };
 
     if (query.startTime !== undefined) filters.startTime = parseInt(query.startTime);
